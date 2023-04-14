@@ -121,7 +121,7 @@ resource "azurerm_linux_virtual_machine" "my_terraform_vm" {
     version   = "latest"
   }
 
-  computer_name                   = "myvm-${count.index}"
+  computer_name                   = "${var.vm_names[count.index]}-VM"
   admin_username                  = "azureuser"
   disable_password_authentication = true
 
@@ -129,6 +129,8 @@ resource "azurerm_linux_virtual_machine" "my_terraform_vm" {
     username   = "azureuser"
     public_key = tls_private_key.example_ssh.public_key_openssh
   }
+
+  custom_data = base64encode(file("${path.module}/base_script_gitpull.sh"))
 
   boot_diagnostics {
     storage_account_uri = azurerm_storage_account.my_storage_account.primary_blob_endpoint
