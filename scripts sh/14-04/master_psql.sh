@@ -4,6 +4,9 @@ MASTER_IP=$1
 NAGIOS_SERVER_IP=$2
 IP_PGPOOL=$3
 SLAVE_IP=$4
+REPMGR_USER="repmgr_user"
+REPMGR_DB="quizztine_db"
+REPMGR_PASSWORD="quizztine"
 
 # Create nagios user
 sudo useradd nagios
@@ -56,20 +59,18 @@ sudo -u postgres bash << EOF
 psql -c "CREATE USER nagios WITH PASSWORD 'quizztine';"
 psql -c "ALTER USER nagios WITH SUPERUSER;"
 psql -c "CREATE DATABASE quizztine_db;"
-psql -c "ALTER USER postgres WITH PASSWORD 'kek';"
+psql -c "ALTER USER postgres WITH PASSWORD 'quizztine';"
 EOF
 
 #convert old db to new db
 cd /tmp 
-sudo pgloader sqlite:///tmp/quizztine_flask/quizztine_site/data.sqlite pgsql://postgres:kek@localhost/quizztine_db
+sudo pgloader sqlite:///tmp/quizztine_flask/quizztine_site/data.sqlite pgsql://postgres:quizztine@localhost/quizztine_db
 #cover problems after conversion (autoincrement goes missing)
 sudo -u postgres bash << EOF
 psql -c "\c quizztine_db;"
 psql -c "CREATE SEQUENCE users_id_seq;"
 psql -c "ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq');"
 EOF
-
-
 
 
 #Modify /etc/postgresql/12/main/pg_hba.conf
@@ -96,15 +97,83 @@ EOF"
 sudo sed -i "s/^server_address=.*/server_address=$MASTER_IP/g" /usr/local/nagios/etc/nrpe.cfg
 sudo sed -i "s/^allowed_hosts=.*/allowed_hosts=127.0.0.1,::1,$NAGIOS_SERVER_IP/g" /usr/local/nagios/etc/nrpe.cfg
 
-
-####### SET UP MASTER SLAVE REPLCIATION
-sudo -u postgres bash << EOF
-psql -c "CREATE ROLE test WITH REPLICATION PASSWORD 'replication' LOGIN;"
-EOF
-sudo bash -c "echo 'host    replication     test            $SLAVE_IP/32             md5' >> /etc/postgresql/12/main/pg_hba.conf"
-sudo systemctl restart postgresql postgresql@12-main
+##############################################
+################ REPMGR ######################
+##############################################
 
 
-#stuff
-sudo systemctl restart nrpe 
-sudo systemctl enable nrpe
+# install repmgr (changes according to version)
+curl https://dl.enterprisedb.com/default/release/get/deb | sudo bash
+sudo apt-get install postgresql-12-repmgr
+
+
+
+# create repmgr user and database
+sudo -u postgres psql -c "CREATE ROLE ${REPMGR_USER} WITH REPLICATION LOGIN PASSWORD '${REPMGR_PASSWORD}';"
+sudo -u postgres psql -c "CREATE DATABASE ${REPMGR_DB} OWNER ${REPMGR_USER};"
+
+
+# update pg_hba.conf
+sudo bash -c "cat << EOF >> /etc/postgresql/12/main/pg_hba.conf
+host    replication     ${REPMGR_USER}         ${SLAVE_IP}/32            md5
+host    ${REPMGR_DB}    ${REPMGR_USER}         ${SLAVE_IP}/32            md5
+host    replication     ${REPMGR_USER}         ${MASTER_IP}/32           md5
+host    ${REPMGR_DB}    ${REPMGR_USER}         ${MASTER_IP}/32           md5
+EOF"
+
+# Update postgresql.conf (uncomment then change)
+sudo sed -i '/^#.*listen_addresses/s/^#//' /etc/postgresql/12/main/postgresql.conf
+sudo sed -i '/^listen_addresses/s/.*/listen_addresses = '\''*'\''/' /etc/postgresql/12/main/postgresql.conf
+
+sudo sed -i '/^#.*wal_level/s/^#//' /etc/postgresql/12/main/postgresql.conf
+sudo sed -i '/^wal_level/s/.*/wal_level = '\''hot_standby'\''/' /etc/postgresql/12/main/postgresql.conf
+
+sudo sed -i '/^#.*max_wal_senders/s/^#//' /etc/postgresql/12/main/postgresql.conf
+sudo sed -i '/^max_wal_senders/s/.*/max_wal_senders = 5/' /etc/postgresql/12/main/postgresql.conf
+
+sudo sed -i '/^#.*hot_standby/s/^#//' /etc/postgresql/12/main/postgresql.conf
+sudo sed -i '/^hot_standby/s/.*/hot_standby = on/' /etc/postgresql/12/main/postgresql.conf
+
+sudo sed -i '/^#.*wal_keep_segments/s/^#//' /etc/postgresql/12/main/postgresql.conf
+sudo sed -i '/^wal_keep_segments/s/.*/wal_keep_segments = 64/' /etc/postgresql/12/main/postgresql.conf
+
+
+# Create & Configure repmgr.conf
+sudo mkdir /etc/repmgr
+sudo bash -c "cat << EOF > /etc/repmgr/repmgr.conf
+node_id=1
+node_name=Master_Node
+conninfo='host=${MASTER_IP} user=${REPMGR_USER} dbname=${REPMGR_DB} password=${REPMGR_PASSWORD}'
+data_directory='/var/lib/postgresql/12/main'
+failover=automatic
+promote_command='repmgr standby promote -f /etc/repmgr/repmgr.conf --log-to-file'
+follow_command='repmgr standby follow -f /etc/repmgr/repmgr.conf --log-to-file --upstream-node-id=%n'
+use_replication_slots=yes
+monitoring_history=yes
+reconnect_attempts=1
+reconnect_interval=1
+service_start_command   = '/usr/bin/pg_ctlcluster 12 main start'
+service_stop_command    = '/usr/bin/pg_ctlcluster 12 main stop'
+service_restart_command = '/usr/bin/pg_ctlcluster 12 main restart'
+service_reload_command  = '/usr/bin/pg_ctlcluster 12 main reload'
+service_promote_command = '/usr/bin/pg_ctlcluster 12 main promote'
+promote_check_timeout = 15
+log_file='/var/log/postgresql/repmgr.log'
+EOF"
+
+#Configure Repmgrd service
+sudo bash -c "cat << EOF > /etc/default/repmgrd
+REPMGRD_ENABLED=yes
+REPMGRD_CONF="/etc/repmgr/repmgr.conf"
+REPMGRD_OPTS="--daemonize=false"
+REPMGRD_USER=postgres
+REPMGRD_BIN=/usr/bin/repmgrd
+REPMGRD_PIDFILE=/var/run/repmgrd.pid
+EOF"
+
+# Restart PostgreSQL & stuff
+sudo systemctl restart postgresql
+sudo systemctl restart repmgrd
+
+# Register master node
+sudo -u postgres bash -c "repmgr -f /etc/repmgr/repmgr.conf master register"

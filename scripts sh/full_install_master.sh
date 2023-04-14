@@ -97,8 +97,6 @@ sudo sed -i "s/^allowed_hosts=.*/allowed_hosts=127.0.0.1,::1,$NAGIOS_SERVER_IP/g
 ####################################### SET UP PROMETHEUS EXPORTER############################################
 ##############################################################################################################
 
-#!/bin/bash
-
 # Set variables
 exporter_version="0.11.1"
 exporter_url="https://github.com/prometheus-community/postgres_exporter/releases/download/v${exporter_version}/postgres_exporter-${exporter_version}.linux-amd64.tar.gz"

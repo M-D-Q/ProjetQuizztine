@@ -17,3 +17,12 @@ output "tls_private_key" {
   sensitive = true
 }
 
+output "internal_ip_addresses" {
+  value = [
+    for index in range(length(azurerm_network_interface.my_terraform_nic)) : {
+      vm_name = azurerm_linux_virtual_machine.my_terraform_vm[index].name
+      internal_ip = azurerm_network_interface.my_terraform_nic[index].ip_configuration[0].private_ip_address
+    }
+  ]
+  description = "List of internal IP addresses for the virtual machines"
+}

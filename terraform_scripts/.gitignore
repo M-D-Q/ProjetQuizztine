@@ -17,3 +17,7 @@
 
 # Ignore the dependency lockfile
 .terraform.lock.hcl
+
+# Ignore the private key
+.id_rsa
+id_rsa
