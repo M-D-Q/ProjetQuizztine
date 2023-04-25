@@ -2,7 +2,9 @@
 
 # Define variables
 MASTER_IP=$1
-SLAVE_IP=$2
+NAGIOS_SERVER_IP=$2
+IP_PGPOOL=$3
+SLAVE_IP=$4
 
 # Update the package lists and install necessary packages
 sudo apt-get update

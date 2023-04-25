@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Define variables
 MASTER_IP=$1
 NAGIOS_SERVER_IP=$2
 IP_PGPOOL=$3

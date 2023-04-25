@@ -26,3 +26,8 @@ output "internal_ip_addresses" {
   ]
   description = "List of internal IP addresses for the virtual machines"
 }
+output "custom_data_debug" {
+  value = {
+    for index, vm_name in var.vm_names : vm_name => base64encode("${file(local.startup_scripts[var.vm_names[index]])} ${local.vm_ips["Postgresql1"]} ${local.vm_ips["Monitoring"]} ${local.vm_ips["LB-database"]} ${local.vm_ips["Postgresql2"]}")
+  }
+}

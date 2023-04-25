@@ -1,5 +1,10 @@
 #!/bin/bash
 
+#get the variables 
+MASTER_IP=$1
+NAGIOS_SERVER_IP=$2
+IP_PGPOOL=$3
+SLAVE_IP=$4
 # Update packages and install required packages
 sudo apt-get update -y
 sudo apt-get install -y pgpool2
@@ -17,13 +22,13 @@ reserved_connections = 0
 pcp_listen_addresses = '*'
 pcp_port = 9898
 pcp_socket_dir = '/var/run/postgresql'
-backend_hostname0 = '10.3.0.7'
+backend_hostname0 = "$MASTER_IP"
 backend_port0 = 5432
 backend_weight0 = 1
 backend_data_directory0 = '/var/lib/pgsql/data'
 backend_flag0 = 'ALLOW_TO_FAILOVER'
 backend_application_name0 = 'master0'
-backend_hostname1 = '10.3.0.6'
+backend_hostname1 = "$SLAVE_IP"
 backend_port1 = 5432
 backend_weight1 = 1
 backend_data_directory1 = '/var/lib/pgsql/data1'

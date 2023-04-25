@@ -49,7 +49,78 @@ resource "azurerm_network_security_group" "my_terraform_nsg" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+    security_rule {
+    name                       = "AllowHTTP"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "AllowHTTPS"
+    priority                   = 101
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "AllowFlaskApp"
+    priority                   = 102
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "5000"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+  security_rule {
+    name                       = "AllowPrometheus"
+    priority                   = 103
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "9090"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "AllowGrafana"
+    priority                   = 104
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3000"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "AllowNagios"
+    priority                   = 105
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "5666" # Nagios NRPE port
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
+
 
 # Create 4 network interfaces
 resource "azurerm_network_interface" "my_terraform_nic" {
@@ -61,7 +132,8 @@ resource "azurerm_network_interface" "my_terraform_nic" {
   ip_configuration {
     name                          = "my_nic_configuration_${count.index}"
     subnet_id                     = azurerm_subnet.my_terraform_subnet.id
-    private_ip_address_allocation = "Dynamic"
+    private_ip_address_allocation = "Static"
+    private_ip_address            = local.static_internal_ips[var.vm_names[count.index]]
     public_ip_address_id          = azurerm_public_ip.my_terraform_public_ip[count.index].id
   }
 }
@@ -102,7 +174,7 @@ resource "tls_private_key" "example_ssh" {
 # Create 4 virtual machines
 resource "azurerm_linux_virtual_machine" "my_terraform_vm" {
   count = length(var.vm_names)
-  name = "${var.vm_names[count.index]}-VM"
+  name = "${var.vm_names[count.index]}"
   location              = azurerm_resource_group.rg.location
   resource_group_name   = azurerm_resource_group.rg.name
   network_interface_ids = [azurerm_network_interface.my_terraform_nic[count.index].id]
@@ -116,12 +188,12 @@ resource "azurerm_linux_virtual_machine" "my_terraform_vm" {
 
   source_image_reference {
     publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
+    offer     = "0001-com-ubuntu-server-focal"
+    sku       = "20_04-lts-gen2"
     version   = "latest"
   }
 
-  computer_name                   = "${var.vm_names[count.index]}-VM"
+  computer_name                   = "${var.vm_names[count.index]}"
   admin_username                  = "azureuser"
   disable_password_authentication = true
 
@@ -130,7 +202,7 @@ resource "azurerm_linux_virtual_machine" "my_terraform_vm" {
     public_key = tls_private_key.example_ssh.public_key_openssh
   }
 
-  custom_data = base64encode(file("${path.module}/base_script_gitpull.sh"))
+  custom_data = base64encode(file(local.startup_scripts[var.vm_names[count.index]]))
 
   boot_diagnostics {
     storage_account_uri = azurerm_storage_account.my_storage_account.primary_blob_endpoint
