@@ -83,7 +83,7 @@ sudo pgloader sqlite:///tmp/quizztine_flask/quizztine_site/data.sqlite pgsql://p
 sudo -u postgres bash << EOF
 psql -d quizztine_db -c "CREATE SEQUENCE users_id_seq;"
 psql -d quizztine_db -c "ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq');"
-psql -d quizztine_db -c "ALTER TABLE questionshtml RENAME TO "questionsHTML";"
+psql -d quizztine_db -c "ALTER TABLE questionshtml RENAME TO 'questionsHTML';"
 EOF
 
 #Modify /etc/postgresql/12/main/pg_hba.conf
