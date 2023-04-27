@@ -96,6 +96,7 @@ sudo systemctl enable nrpe
 ###################################################################
 ##############         REP MGR INSTALL          ###################
 ###################################################################
+
 # update pg_hba.conf
 sudo bash -c "cat << EOF >> /etc/postgresql/12/main/pg_hba.conf
 local   replication     ${REPMGR_USER}                                  trust

@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Define variables
-export MASTER_IP="10.0.1.10"
-export NAGIOS_SERVER_IP="10.0.1.14"
-export IP_PGPOOL="10.0.1.13"
-export SLAVE_IP="10.0.1.11"
-export REPMGR_USER="repmgr"
-export REPMGR_DB="repmgr_db"
-export REPMGR_PASSWORD="quizztine"
+MASTER_IP="10.0.1.10"
+NAGIOS_SERVER_IP="10.0.1.14"
+IP_PGPOOL="10.0.1.13"
+SLAVE_IP="10.0.1.11"
+REPMGR_USER="repmgr"
+REPMGR_DB="repmgr_db"
+REPMGR_PASSWORD="quizztine"
 
 # Create nagios user
 sudo useradd nagios
@@ -61,9 +61,6 @@ sslmode=require
 EOF"
 
 
-#Clone the git repo
-cd /tmp
-git clone https://github.com/M-D-Q/quizztine_flask.git
 
 
 #Setup postgresql
@@ -73,6 +70,11 @@ psql -c "ALTER USER nagios WITH SUPERUSER;"
 psql -c "CREATE DATABASE quizztine_db;"
 psql -c "ALTER USER postgres WITH PASSWORD 'quizztine';"
 EOF
+
+#Clone the git repo
+cd /tmp
+git clone https://github.com/M-D-Q/quizztine_flask.git
+
 
 #convert old db to new db
 cd /tmp 
@@ -200,6 +202,7 @@ sudo systemctl restart nrpe
 # Register master node
 sudo -u postgres bash -c "repmgr -f /etc/repmgr/repmgr.conf master register"
 
+########################""PROMETHEUS##########################################
 
 # Set variables
 exporter_version="0.11.1"

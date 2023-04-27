@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Define variables
-export MASTER_IP="10.0.1.10"
-export NAGIOS_SERVER_IP="10.0.1.14"
-export IP_PGPOOL="10.0.1.13"
-export SLAVE_IP="10.0.1.11"
-export FLASK_IP="10.0.1.12"
+MASTER_IP="10.0.1.10"
+NAGIOS_SERVER_IP="10.0.1.14"
+IP_PGPOOL="10.0.1.13"
+SLAVE_IP="10.0.1.11"
+FLASK_IP="10.0.1.12"
 
 
 # Update packages and install required packages
@@ -176,7 +176,7 @@ EOF"
 sudo chown root:pgpool /etc/pgpool2/*
 sudo chmod 640 /etc/pgpool2/*
 
-sudo systemctl start pgpool2
 sudo systemctl enable pgpool2
+sudo systemctl start pgpool2
 sudo sleep 25
 sudo systemctl restart pgpool2
