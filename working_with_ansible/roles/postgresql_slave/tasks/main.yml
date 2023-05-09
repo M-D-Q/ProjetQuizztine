@@ -1,0 +1,90 @@
+---
+- name: Configure PostgreSQL slave
+  hosts: slave
+  become: yes
+  vars_files:
+    - /group_vars/all.yml
+
+  tasks:
+  - name: Include common PostgreSQL tasks
+    import_role:
+      name: common_psql
+
+  - name: Update server_address in nrpe.cfg
+    lineinfile:
+      path: /usr/local/nagios/etc/nrpe.cfg
+      regexp: "^server_address=.*"
+      line: "server_address={{ master_ip }}"
+    become: yes
+
+  - name: Enable nrpe service
+    ansible.builtin.systemd:
+      name: nrpe
+      enabled: true
+    become: true
+
+  - name: Restart nrpe service
+    ansible.builtin.systemd:
+      name: nrpe
+      state: restarted
+    become: true
+
+
+  - name: Stop PostgreSQL
+    ansible.builtin.systemd:
+      name: postgresql
+      state: stopped
+
+  - name: Remove existing data directory
+    ansible.builtin.file:
+      path: /var/lib/postgresql/12/main/
+      state: absent
+
+  - name: Clone master data
+    ansible.builtin.shell: |
+      export PGPASSWORD='{{ repmgr_password }}'
+      repmgr -h {{ master_ip }} -U {{ repmgr_user }} -d {{ repmgr_db }} -D /var/lib/postgresql/12/main/ --force standby clone
+      unset PGPASSWORD
+    become_user: postgres
+
+  - name: Create repmgr.conf
+    ansible.builtin.copy:
+      dest: /etc/repmgr/repmgr.conf
+      content: |
+        node_id=2
+        node_name=Slave_Node
+        conninfo='host={{ master_ip }} user={{ repmgr_user }} dbname={{ repmgr_db }} password={{ repmgr_password }}'
+        data_directory='/var/lib/postgresql/12/main'
+        failover=automatic
+        promote_command='repmgr standby promote -f /etc/repmgr/repmgr.conf --log-to-file'
+        follow_command='repmgr standby follow -f /etc/repmgr/repmgr.conf --log-to-file --upstream-node-id=%n'
+        use_replication_slots=yes
+        monitoring_history=yes
+        reconnect_attempts=1
+        reconnect_interval=1
+        service_start_command   = '/usr/bin/pg_ctlcluster 12 main start'
+        service_stop_command    = '/usr/bin/pg_ctlcluster 12 main stop'
+        service_restart_command = '/usr/bin/pg_ctlcluster 12 main restart'
+        service_reload_command  = '/usr/bin/pg_ctlcluster 12 main reload'
+        service_promote_command = '/usr/bin/pg_ctlcluster 12 main promote'
+        promote_check_timeout = 15
+        log_file='/var/log/postgresql/repmgr.log'
+
+
+  - name: Restart repmgrd service
+  ansible.builtin.systemd:
+    name: repmgrd
+    state: restarted
+  become: true
+
+  - name: Start PostgreSQL service
+    ansible.builtin.systemd:
+      name: postgresql
+      state: started
+    become: true
+
+  - name: Register standby node
+    ansible.builtin.command:
+      cmd: "repmgr -f /etc/repmgr/repmgr.conf standby register"
+    become: true
+    become_user: postgres

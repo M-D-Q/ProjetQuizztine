@@ -90,8 +90,9 @@ sudo sed -i "s/^server_address=.*/server_address=$SLAVE_IP/g" /usr/local/nagios/
 sudo sed -i "s/^allowed_hosts=.*/allowed_hosts=127.0.0.1,::1,$NAGIOS_SERVER_IP/g" /usr/local/nagios/etc/nrpe.cfg
 
 #stuff
-sudo systemctl restart nrpe 
+
 sudo systemctl enable nrpe
+sudo systemctl restart nrpe 
 
 ###################################################################
 ##############         REP MGR INSTALL          ###################
