@@ -1,0 +1,179 @@
+---
+- name: Shared tasks between slave & master PSQL go here
+  block:
+  - name: Create nagios user
+    user:
+      name: nagios
+      state: present
+
+  - name: Update system packages
+    apt:
+      update_cache: yes
+
+  - name: Install necessary packages
+    apt:
+      name:
+        - autoconf
+        - gcc
+        - libperl-dev
+        - libmcrypt-dev
+        - make
+        - libssl-dev
+        - wget
+        - dc
+        - build-essential
+        - gettext
+        - libdbd-pg-perl
+        - postgresql-12
+        - postgresql-client
+        - pgloader
+        - libnagios-plugin-perl
+      state: present
+
+  - name: Download and install Nagios plugins
+    block:
+      - name: Download Nagios plugins
+        get_url:
+          url: https://github.com/nagios-plugins/nagios-plugins/releases/download/release-2.4.2/nagios-plugins-2.4.2.tar.gz
+          dest: /tmp/nagios-plugins-2.4.2.tar.gz
+      - name: Extract Nagios plugins
+        unarchive:
+          src: /tmp/nagios-plugins-2.4.2.tar.gz
+          dest: /tmp/
+          remote_src: yes
+      - name: Install Nagios plugins
+        command: "{{ item }}"
+        args:
+          chdir: /tmp/nagios-plugins-2.4.2/
+        loop:
+          - ./configure
+          - make
+          - sudo make install
+    become: yes
+
+  - name : Download and install check_postgres Nagios plugin
+    block :
+      - name: Clone check_postgres repository
+        ansible.builtin.git:
+          repo: https://github.com/bucardo/check_postgres.git
+          dest: /tmp/check_postgres
+
+      - name: Copy check_postgres.pl to /usr/local/nagios/libexec/
+        ansible.builtin.copy:
+          src: /tmp/check_postgres/check_postgres.pl
+          dest: /usr/local/nagios/libexec/check_postgres.pl
+
+      - name: Create symlinks using check_postgres.pl
+        ansible.builtin.command:
+          cmd: perl /usr/local/nagios/libexec/check_postgres.pl --symlinks
+
+  - name: Add configuration to pg_service.conf
+    ansible.builtin.blockinfile:
+      path: /etc/postgresql-common/pg_service.conf
+      block: |
+        [quizztine_db]
+        host=localhost
+        port=5432
+        user=nagios
+        password=quizztine
+        dbname=quizztine_db
+        sslmode=require
+      marker: "# {mark} ANSIBLE MANAGED BLOCK"
+      create: yes
+    become: yes
+
+  
+- name: Modify /etc/postgresql/12/main/pg_hba.conf
+  blockinfile:
+    path: /etc/postgresql/12/main/pg_hba.conf
+    block: |
+      host    all             all             {{ master_ip }}/32             md5
+      host    all             all             {{ slave_ip }}/32              md5
+      host    all             quizztine_db    {{ ip_pgpool }}/32             md5
+      host    all             all             {{ ip_pgpool }}/32             md5
+  become: yes
+
+- name: Modify /etc/postgresql/12/main/postgresql.conf
+  lineinfile:
+    path: /etc/postgresql/12/main/postgresql.conf
+    regexp: "^#listen_addresses = 'localhost'"
+    line: "listen_addresses = '*'"
+  become: yes
+
+- name: Add commands to nrpe.cfg
+  blockinfile:
+    path: /usr/local/nagios/etc/nrpe.cfg
+    block: |
+      command[check_users]=/usr/local/nagios/libexec/check_users -w 5 -c 10
+      command[check_load]=/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20
+      command[check_hda1]=/usr/local/nagios/libexec/check_disk -w 20% -c 10% -p /dev/root
+      command[check_zombie_procs]=/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z
+      command[check_total_procs]=/usr/local/nagios/libexec/check_procs -w 150 -c 200
+      command[check_postgres_locks]=/usr/local/nagios/libexec/check_postgres_locks -w 2 -c 3 -H=localhost -u=nagios --dbpass=quizztine --dbname=quizztine_db
+      command[check_postgres_bloat]=/usr/local/nagios/libexec/check_postgres_bloat -w='100 M' -c='200 M' -H=localhost --dbpass=quizztine --dbname=quizztine_db -u=nagios
+      command[check_postgres_connection]=/usr/local/nagios/libexec/check_postgres_connection --db=quizztine_db -H=localhost --dbpass=quizztine --dbname=quizztine_db -u=nagios
+      command[check_postgres_backends]=/usr/local/nagios/libexec/check_postgres_backends -w=3 -c=100 -H=localhost --dbpass=quizztine --dbname=quizztine_db -u=nagios
+  become: yes
+
+
+- name: Update allowed_hosts in nrpe.cfg
+  lineinfile:
+    path: /usr/local/nagios/etc/nrpe.cfg
+    regexp: "^allowed_hosts=.*"
+    line: "allowed_hosts=127.0.0.1,::1,{{ nagios_server_ip }}"
+  become: yes
+
+
+- name: Add the PostgreSQL repository
+  ansible.builtin.shell: "curl https://dl.enterprisedb.com/default/release/get/deb | sudo bash"
+  args:
+    warn: no
+
+- name: Install repmgr packages
+  ansible.builtin.apt:
+    name:
+      - postgresql-12-repmgr
+      - repmgr-common
+    state: present
+  become: yes
+
+- name: Update pg_hba.conf for repmgr
+  blockinfile:
+    path: /etc/postgresql/12/main/pg_hba.conf
+    block: |
+      local   replication     {{ repmgr_user }}                                  trust
+      host    {{ repmgr_db }}    {{ repmgr_user }}         {{ slave_ip }}/32            trust
+      host    replication     {{ repmgr_user }}         {{ master_ip }}/32           trust
+      host    {{ repmgr_db }}    {{ repmgr_user }}         {{ master_ip }}/32           trust
+      host    replication     {{ repmgr_user }}         {{ slave_ip }}/32            md5
+      host    {{ repmgr_db }}    {{ repmgr_user }}         {{ slave_ip }}/32            md5
+      host    replication     {{ repmgr_user }}         {{ master_ip }}/32           md5
+      host    {{ repmgr_db }}    {{ repmgr_user }}         {{ master_ip }}/32           md5
+  become: yes
+
+
+- name: Update postgresql.conf
+  ansible.builtin.replace:
+    path: /etc/postgresql/12/main/postgresql.conf
+    regexp: "{{ item.regexp }}"
+    replace: "{{ item.replace }}"
+  with_items:
+    - { regexp: '^#.*(listen_addresses)', replace: 'listen_addresses = '\''*'\''' }
+    - { regexp: '^#.*(wal_level)', replace: 'wal_level = '\''hot_standby'\''' }
+    - { regexp: '^#.*(max_wal_senders)', replace: 'max_wal_senders = 5' }
+    - { regexp: '^#.*(hot_standby)', replace: 'hot_standby = on' }
+    - { regexp: '^#.*(wal_keep_segments)', replace: 'wal_keep_segments = 64' }
+  become: yes
+
+
+- name: Configure Repmgrd service
+  ansible.builtin.copy:
+    dest: /etc/default/repmgrd
+    content: |
+      REPMGRD_ENABLED=yes
+      REPMGRD_CONF="/etc/repmgr/repmgr.conf"
+      REPMGRD_OPTS="--daemonize=false"
+      REPMGRD_USER=postgres
+      REPMGRD_BIN=/usr/bin/repmgrd
+      REPMGRD_PIDFILE=/var/run/repmgrd.pid
+  become: yes

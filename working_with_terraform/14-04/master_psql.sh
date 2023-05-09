@@ -29,7 +29,6 @@ make
 sudo make install
 
 # Download and install NRPE
-cd ~
 cd /tmp
 curl -L -O https://github.com/NagiosEnterprises/nrpe/releases/download/nrpe-4.1.0/nrpe-4.1.0.tar.gz
 tar zxf nrpe-4.1.0.tar.gz
@@ -42,7 +41,6 @@ sudo make install-config
 sudo make install-init
 
 #Download and install check_postgres
-cd ~
 cd /tmp
 git clone https://github.com/bucardo/check_postgres.git
 cd check_postgres
