@@ -1,0 +1,29 @@
+- name: Configure PostgreSQL Master
+  hosts: postgresql-master
+  roles:
+    - common
+    - postgresql_master
+
+- name: Configure PostgreSQL Slave
+  hosts: postgresql-slave
+  roles:
+    - common
+    - postgresql_slave
+
+- name: Configure Flask Server
+  hosts: flask
+  roles:
+    - common
+    - flask_server
+
+- name: Configure PG Pool
+  hosts: lb-database
+  roles:
+    - common
+    - pg_pool
+
+- name: Configure Monitoring Server
+  hosts: monitoring
+  roles:
+    - common
+    - monitoring_server

@@ -1,0 +1,52 @@
+---
+- name: Create nagios user
+  user:
+    name: nagios
+    state: present
+
+- name: Update system packages
+  apt:
+    update_cache: yes
+
+- name: Install necessary packages
+  apt:
+    name:
+      - autoconf
+      - gcc
+      - libperl-dev
+      - libmcrypt-dev
+      - make
+      - libssl-dev
+      - wget
+      - dc
+      - build-essential
+      - gettext
+      - libdbd-pg-perl
+      - postgresql-12
+      - postgresql-client
+      - pgloader
+      - libnagios-plugin-perl
+    state: present
+
+- name: Download and install Nagios plugins
+  block:
+    - name: Download Nagios plugins
+      get_url:
+        url: https://github.com/nagios-plugins/nagios-plugins/releases/download/release-2.4.2/nagios-plugins-2.4.2.tar.gz
+        dest: /tmp/nagios-plugins-2.4.2.tar.gz
+    - name: Extract Nagios plugins
+      unarchive:
+        src: /tmp/nagios-plugins-2.4.2.tar.gz
+        dest: /tmp/
+        remote_src: yes
+    - name: Install Nagios plugins
+      command: "{{ item }}"
+      args:
+        chdir: /tmp/nagios-plugins-2.4.2/
+      loop:
+        - ./configure
+        - make
+        - sudo make install
+  become: yes
+
+# ... Continue with the rest of the tasks

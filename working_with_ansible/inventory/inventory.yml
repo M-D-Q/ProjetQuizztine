@@ -1,0 +1,36 @@
+all:
+  children:
+    database-master:
+      hosts:
+        postgresql-master:
+          ansible_host: 10.0.1.10
+          ansible_user: azureuser
+          ansible_ssh_private_key_file: id_rsa
+
+    database-slave:
+      hosts:
+        postgresql-slave:
+          ansible_host: 10.0.1.11
+          ansible_user: azureuser
+          ansible_ssh_private_key_file: id_rsa
+
+    lb-database:
+      hosts:
+        lb-database:
+          ansible_host: 10.0.1.13
+          ansible_user: azureuser
+          ansible_ssh_private_key_file: id_rsa
+
+    flask:
+      hosts:
+        flask:
+          ansible_host: 10.0.1.12
+          ansible_user: azureuser
+          ansible_ssh_private_key_file: id_rsa
+
+    monitoring:
+      hosts:
+        monitoring:
+          ansible_host: 10.0.1.14
+          ansible_user: azureuser
+          ansible_ssh_private_key_file: id_rsa

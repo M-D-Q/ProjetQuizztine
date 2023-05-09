@@ -1,0 +1,8 @@
+# vars/main.yml
+master_ip: "10.0.1.10"
+nagios_server_ip: "10.0.1.14"
+ip_pgpool: "10.0.1.13"
+slave_ip: "10.0.1.11"
+repmgr_user: "repmgr"
+repmgr_db: "repmgr_db"
+repmgr_password: "quizztine"
