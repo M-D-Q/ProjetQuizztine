@@ -1,0 +1,152 @@
+
+- name: Update the package lists and install necessary packages
+  package:
+    name:
+      - autoconf
+      - gcc
+      - libc6
+      - make
+      - wget
+      - unzip
+      - apache2
+      - php
+      - libapache2-mod-php7.4
+      - libgd-dev
+      - openssl
+      - libssl-dev
+    state: present
+  update_cache: yes
+  
+- name: Download and install Nagios Core
+  block:
+    - name: Download Nagios Core
+      get_url:
+        url: https://github.com/NagiosEnterprises/nagioscore/archive/nagios-4.4.6.tar.gz
+        dest: /tmp/nagioscore.tar.gz
+    - name: Extract Nagios Core
+      unarchive:
+        src: /tmp/nagioscore.tar.gz
+        dest: /tmp
+        remote_src: yes
+    - name: Configure Nagios Core
+      shell: ./configure --with-httpd-conf=/etc/apache2/sites-enabled
+      args:
+        chdir: /tmp/nagioscore-nagios-4.4.6/
+    - name: Build and install Nagios Core
+      make:
+        chdir: /tmp/nagioscore-nagios-4.4.6/
+        target: "{{ item }}"
+      loop:
+        - all
+        - install-groups-users
+        - install
+        - install-daemoninit
+        - install-commandmode
+        - install-config
+        - install-webconf
+
+- name: Add nagios user to the www-data group
+  user:
+    name: www-data
+    groups: nagios
+    append: yes
+
+- name: Enable required Apache modules
+  apache2_module:
+    state: present
+    name: "{{ item }}"
+  loop:
+    - rewrite
+    - cgi
+
+- name: Allow Apache through the firewall
+  ufw:
+    rule: allow
+    name: Apache
+
+- name: Reload ufw
+  command: ufw reload
+
+- name: Set up Nagios admin user
+  command: htpasswd -b -c /usr/local/nagios/etc/htpasswd.users nagiosadmin quizztine
+
+
+  
+- name: Restart Apache and Nagios services
+  systemd:
+    name: "{{ item }}"
+    state: restarted
+  loop:
+    - apache2
+    - nagios
+
+- name: Install necessary packages for Nagios plugins
+  package:
+    name:
+      - autoconf
+      - gcc
+      - libc6
+      - libmcrypt-dev
+      - make
+      - libssl-dev
+      - wget
+      - bc
+      - gawk
+      - dc
+      - build-essential
+      - snmp
+      - libnet-snmp-perl
+      - gettext
+    state: present
+
+# (Download and install Nagios plugins and NRPE tasks)
+
+- name: Enable Apache and Nagios to start at boot
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+  loop:
+    - apache2
+    - nagios
+
+- name: Add check_nrpe command definition to commands.cfg
+  blockinfile:
+    path: /usr/local/nagios/etc/objects/commands.cfg
+    block: |
+      define command{
+          command_name check_nrpe
+          command_line \$USER1\$/check_nrpe -H \$HOSTADDRESS\$ -c \$ARG1\$
+      }
+
+- name: Add PostgreSQL master and slave config files to nagios.cfg
+  blockinfile:
+    path: /usr/local/nagios/etc/nagios.cfg
+    block: |
+      cfg_file=/usr/local/nagios/etc/pg_master.cfg
+      cfg_file=/usr/local/nagios/etc/pg_slave.cfg
+
+- name: Create /usr/local/nagios/etc/pg_master.cfg file
+  template:
+    src: pg_master.cfg.j2
+    dest: /usr/local/nagios/etc/pg_master.cfg
+    owner: nagios
+    group: nagios
+    mode: 0644
+
+- name: Create /usr/local/nagios/etc/pg_slave.cfg file
+  template:
+    src: pg_slave.cfg.j2
+    dest: /usr/local/nagios/etc/pg_slave.cfg
+    owner: nagios
+    group: nagios
+    mode: 0644
+
+- name: Enable and restart services
+  systemd:
+    name: "{{ item }}"
+    enabled: yes
+    state: restarted
+  loop:
+    - nagios
+    - nrpe
+    - apache2

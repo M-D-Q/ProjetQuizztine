@@ -2,12 +2,14 @@
   hosts: postgresql-master
   roles:
     - common
+    - common_psql
     - postgresql_master
 
 - name: Configure PostgreSQL Slave
   hosts: postgresql-slave
   roles:
     - common
+    - common_psql
     - postgresql_slave
 
 - name: Configure Flask Server
