@@ -1,0 +1,55 @@
+---
+- name: Set up Flask server
+  hosts: flask_server
+  become: yes
+  vars_files:
+    - /group_vars/all.yml
+
+  tasks:
+  - name: Update the package list
+    apt:
+      update_cache: yes
+
+  - name: Install Python3, pip, git, and Flask
+    apt:
+      name:
+        - python3
+        - python3-pip
+        - git
+        - python3-flask
+      state: present
+
+  - name: Clone quizztine_flask repository
+    git:
+      repo: https://github.com/M-D-Q/quizztine_flask.git
+      dest: /home/azureuser/quizztine_flask
+      update: no
+    become_user: azureuser
+
+  - name: Update requirements.txt
+    lineinfile:
+      path: /home/azureuser/quizztine_flask/requirements.txt
+      regexp: "^psycopg2==2.9.5"
+      line: "psycopg2-binary"
+
+  - name: Install Python packages from requirements.txt
+    pip:
+      requirements: /home/azureuser/quizztine_flask/requirements.txt
+      executable: pip3
+      extra_args: --user
+    become: no
+
+
+  - name: Replace placeholder in __init__.py
+    replace:
+      path: /home/azureuser/quizztine_flask/quizztine_site/__init__.py
+      regexp: "£ip_database£"
+      replace: "{{ ip_pgpool }}"
+
+  - name: Launch Flask app
+    command: python3 app.py
+    args:
+      chdir: /home/azureuser/quizztine_flask
+    become_user: azureuser
+    async: 1
+    poll: 0

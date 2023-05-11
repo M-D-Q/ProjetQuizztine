@@ -1,0 +1,128 @@
+---
+- name: Include common PostgreSQL tasks
+  import_role:
+    name: common_psql
+
+
+- name: Setup PostgreSQL
+  block:
+    - name: Create user nagios
+      ansible.builtin.postgresql_user:
+        name: nagios
+        password: quizztine
+        login_user: postgres
+
+    - name: Alter user nagios with SUPERUSER
+      ansible.builtin.postgresql_user:
+        name: nagios
+        role_attr_flags: SUPERUSER
+        login_user: postgres
+
+    - name: Create database quizztine_db
+      ansible.builtin.postgresql_db:
+        name: quizztine_db
+        login_user: postgres
+
+    - name: Alter user postgres with password
+      ansible.builtin.postgresql_user:
+        name: postgres
+        password: quizztine
+        login_user: postgres
+  become: yes
+  become_user: postgres
+
+- name: Clone the Quizztine Flask repository
+  ansible.builtin.git:
+    repo: https://github.com/M-D-Q/quizztine_flask.git
+    dest: /tmp/quizztine_flask
+
+- name: Convert old SQLite database to new PostgreSQL database
+  ansible.builtin.shell:
+    cmd: pgloader sqlite:///tmp/quizztine_flask/quizztine_site/data.sqlite pgsql://postgres:quizztine@localhost/quizztine_db
+
+- name: Fix issues after conversion
+  block:
+    - name: Create users_id_seq sequence
+      ansible.builtin.postgresql_query:
+        db: quizztine_db
+        query: "CREATE SEQUENCE users_id_seq;"
+
+    - name: Alter users table id column default
+      ansible.builtin.postgresql_query:
+        db: quizztine_db
+        query: "ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq');"
+
+    - name: Rename questionshtml table to questionsHTML
+      ansible.builtin.postgresql_query:
+        db: quizztine_db
+        query: 'ALTER TABLE questionshtml RENAME TO "questionsHTML";'
+  become: yes
+  become_user: postgres
+
+- name: Update server_address in nrpe.cfg
+  lineinfile:
+    path: /usr/local/nagios/etc/nrpe.cfg
+    regexp: "^server_address=.*"
+    line: "server_address={{ master_ip }}"
+  become: yes
+
+- name: Create repmgr user and database
+  ansible.builtin.postgresql_user:
+    login_host: localhost
+    login_user: postgres
+    name: "{{ repmgr_user }}"
+    password: "{{ repmgr_password }}"
+    role_attr_flags: REPLICATION,SUPERUSER
+    state: present
+  become: yes
+
+- name: Create repmgr database
+ansible.builtin.postgresql_db:
+  login_host: localhost
+  login_user: postgres
+  name: "{{ repmgr_db }}"
+  owner: "{{ repmgr_user }}"
+  state: present
+become: yes
+
+- name: Create and configure repmgr.conf
+  ansible.builtin.copy:
+    dest: /etc/repmgr/repmgr.conf
+    content: |
+      node_id=1
+      node_name=Master_Node
+      conninfo='host={{ master_ip }} user={{ repmgr_user }} dbname={{ repmgr_db }} password={{ repmgr_password }}'
+      data_directory='/var/lib/postgresql/12/main'
+      failover=automatic
+      promote_command='repmgr standby promote -f /etc/repmgr/repmgr.conf --log-to-file'
+      follow_command='repmgr standby follow -f /etc/repmgr/repmgr.conf --log-to-file --upstream-node-id=%n'
+      use_replication_slots=yes
+      monitoring_history=yes
+      reconnect_attempts=1
+      reconnect_interval=1
+      service_start_command   = '/usr/bin/pg_ctlcluster 12 main start'
+      service_stop_command    = '/usr/bin/pg_ctlcluster 12 main stop'
+      service_restart_command = '/usr/bin/pg_ctlcluster 12 main restart'
+      service_reload_command  = '/usr/bin/pg_ctlcluster 12 main reload'
+      service_promote_command = '/usr/bin/pg_ctlcluster 12 main promote'
+      promote_check_timeout = 15
+      log_file='/var/log/postgresql/repmgr.log'
+  become: yes
+
+- name: Restart PostgreSQL and other services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: restarted
+    enabled: yes
+  loop:
+    - postgresql
+    - repmgrd
+    - nrpe
+  become: yes
+
+- name: Register master node
+  ansible.builtin.shell: "repmgr -f /etc/repmgr/repmgr.conf master register"
+  args:
+    executable: /bin/bash
+  become: yes
+  become_user: postgres

@@ -32,6 +32,6 @@ variable "ARM_CLIENT_SECRET" {
 
 variable "vm_names" {
   type = list(string)
-  default = ["Postgresql1", "Postgresql2", "Flask", "LB-database", "Monitoring"]
+  default = ["Postgresql1", "Postgresql2", "Flask", "LB-database", "Monitoring", "AnsibleVM"]
 }
 

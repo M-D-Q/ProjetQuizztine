@@ -1,6 +1,5 @@
 locals {
   startup_scripts = {
-    "AnsibleVM"       = "14-04/ansiblevm.sh"
     "Postgresql1"     = "14-04/master_psql.sh"
     "Postgresql2"     = "14-04/slave_psql.sh"
     "Flask"           = "14-04/flask_server.sh"
@@ -10,7 +9,6 @@ locals {
   }
 
   static_internal_ips = {
-    "AnsibleVM"   = "10.0.1.9"
     "Postgresql1" = "10.0.1.10"
     "Postgresql2" = "10.0.1.11"
     "Flask"       = "10.0.1.12"
