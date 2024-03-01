@@ -12,22 +12,22 @@ variable "resource_group_name_prefix" {
 
 variable "ARM_SUBSCRIPTION_ID" {
   type    = string
-  default = "4e3137f5-801e-4ca9-b7e9-6c979ed03c8d"
+  default = "................."
 }
 
 variable "ARM_TENANT_ID" {
   type    = string
-  default = "2954b8c5-adeb-42af-9b9b-607bb0d701aa"
+  default = "..............."
 }
 
 variable "ARM_CLIENT_ID" {
   type    = string
-  default = "cb238434-7460-4311-9897-fa24e0f095fc"
+  default = "................"
 }
 
 variable "ARM_CLIENT_SECRET" {
   type    = string
-  default = "u2n8Q~jDK6aY5adzK7_8JCo-OU.gkl8HKQvBNbL1"
+  default = "................"
 }
 
 variable "vm_names" {
